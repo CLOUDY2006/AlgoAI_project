@@ -23,6 +23,12 @@ const ALLOWED_TOPICS = [
   "bit-manipulation",
 ] as const;
 
+const assessmentAnswerSchema = z.object({
+  topic: z.string().min(1),
+  difficulty: z.string().min(1),
+  correct: z.boolean(),
+});
+
 export const onboardingSchema = z.object({
   experienceLevel: z.enum(ALLOWED_LEVELS),
   goals: z.string().min(3).max(500),
@@ -37,6 +43,13 @@ export const onboardingSchema = z.object({
         message: "preferredTopics must be unique.",
       },
     ),
+  // NOTE: these three were previously silently stripped by Zod (unrecognized
+  // keys are dropped by default) even though the frontend already sent them —
+  // that was the root cause of the basic-question assessment never actually
+  // being used. Now explicitly accepted.
+  testAnswers: z.array(assessmentAnswerSchema).max(50).optional(),
+  testScore: z.number().int().min(0).optional(),
+  timeCommitment: z.string().max(100).optional(),
 });
 
 export const completeDaySchema = z.object({
