@@ -141,8 +141,16 @@ export const TOPIC_GRAPH: Record<string, TopicNode> = {
  * This is what stops "Day 1 = Array, Day 2 = Linked List, Day 3 = Graph"
  * (the exact bug this task is meant to fix): a preferred topic like "graphs"
  * pulls in trees/queue/recursion first, in the right order.
+ *
+ * `secondaryPriority` (optional) is woven in right after the user's own
+ * explicit picks (and their prerequisites) but before the generic remaining
+ * taxonomy — this is how a stated goal (Part 10) nudges topic ordering
+ * without overriding what the user actually chose.
  */
-export const buildTopicOrder = (preferredTopics: string[]): string[] => {
+export const buildTopicOrder = (
+  preferredTopics: string[],
+  secondaryPriority: string[] = [],
+): string[] => {
   const visited = new Set<string>();
   const order: string[] = [];
 
@@ -154,6 +162,7 @@ export const buildTopicOrder = (preferredTopics: string[]): string[] => {
   };
 
   preferredTopics.forEach(visit);
+  secondaryPriority.forEach(visit);
 
   // Fill in any remaining topics (from the full graph) afterward, in their
   // own prerequisite order, so the roadmap has somewhere to go once the

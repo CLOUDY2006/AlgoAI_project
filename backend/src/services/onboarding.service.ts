@@ -16,6 +16,7 @@ import {
   TopicKnowledge,
 } from "../types/onboarding.types";
 import { buildTopicOrder, TOPIC_GRAPH } from "../data/topicTaxonomy";
+import { getTopicDifficultyMap, TopicDifficultyInfo } from "./topicDifficulty.service";
 import prisma from "../utils/prisma";
 
 const LEVEL_ORDER: ExperienceLevel[] = ["beginner", "intermediate", "advanced"];
@@ -173,6 +174,56 @@ const LEVEL_BASE_INDEX: Record<ExperienceLevel, number> = {
   advanced: 1,
 };
 
+// ─── Part 10: goal-driven topic priority + difficulty pacing ──────────────
+//
+// The 5 real onboarding goal ids (see Onboarding.tsx's `goals` array) each
+// map to a topic emphasis and a difficulty ramp speed. Not every goal needs
+// a different ramp — "startup" and "upskill" intentionally share the
+// default pace; the point is that each is a deliberate mapping, not that
+// all 5 must be visually distinct.
+interface GoalProfile {
+  /** Topics to weave in early (after the user's own picks), beyond what they selected. */
+  priorityTopics: string[];
+  /**
+   * How far into the roadmap (0-1) before day-difficulty gets a "push
+   * toward harder" bump. Lower = ramps to harder difficulty sooner.
+   */
+  difficultyRampThreshold: number;
+}
+
+const DEFAULT_GOAL_PROFILE: GoalProfile = { priorityTopics: [], difficultyRampThreshold: 0.66 };
+
+const GOAL_PROFILES: Record<string, GoalProfile> = {
+  // FAANG/MAANG Interview — classic interview-pattern topics, ramps hardest/fastest.
+  faang: {
+    priorityTopics: ["arrays", "hashing", "two-pointers", "sliding-window", "trees", "graphs", "dp", "binary-search"],
+    difficultyRampThreshold: 0.5,
+  },
+  // Competitive Programming — algorithmic breadth and depth, ramps fastest of all.
+  competitive: {
+    priorityTopics: ["graphs", "dp", "greedy", "bit-manipulation", "backtracking", "heaps", "trie"],
+    difficultyRampThreshold: 0.45,
+  },
+  // Startup Job — practical fundamentals, standard pace.
+  startup: {
+    priorityTopics: ["arrays", "strings", "hashing", "trees", "recursion"],
+    difficultyRampThreshold: 0.6,
+  },
+  // Campus Placements — entry-level interview scope, gentler ramp.
+  campus: {
+    priorityTopics: ["arrays", "strings", "linked-list", "stack", "queue", "trees", "binary-search"],
+    difficultyRampThreshold: 0.7,
+  },
+  // General Upskilling — fundamentals-first, gradual, closest to a
+  // from-scratch learning path.
+  upskill: {
+    priorityTopics: ["arrays", "strings", "linked-list", "recursion"],
+    difficultyRampThreshold: 0.7,
+  },
+};
+
+const getGoalProfile = (goal: string): GoalProfile => GOAL_PROFILES[goal] ?? DEFAULT_GOAL_PROFILE;
+
 const computeDayDifficulty = (opts: {
   level: ExperienceLevel;
   topicScorePercent: number | null;
@@ -180,6 +231,7 @@ const computeDayDifficulty = (opts: {
   topicSubtopicCount: number;
   globalDayIndex: number;
   totalRoadmapDays: number;
+  difficultyRampThreshold: number;
 }): string => {
   let base = LEVEL_BASE_INDEX[opts.level];
 
@@ -197,9 +249,10 @@ const computeDayDifficulty = (opts: {
       ? Math.round((opts.dayIndexInTopic / (opts.topicSubtopicCount - 1)) * 1)
       : 0;
 
-  // Gentle whole-roadmap progression so day 1 is never harder than the end.
+  // Whole-roadmap progression so day 1 is never harder than the end — how
+  // early this kicks in is goal-dependent (Part 10).
   const globalRatio = opts.totalRoadmapDays > 1 ? opts.globalDayIndex / (opts.totalRoadmapDays - 1) : 0;
-  const globalBump = globalRatio > 0.66 ? 1 : 0;
+  const globalBump = globalRatio > opts.difficultyRampThreshold ? 1 : 0;
 
   const index = Math.max(0, Math.min(2, base + withinTopicBump + globalBump));
   return DIFFICULTY_LABELS[index];
@@ -209,7 +262,8 @@ const buildPersonalizedRoadmap = (
   input: OnboardingInput,
   assessment: OnboardingAssessment,
 ): RoadmapDay[] => {
-  const topicOrder = buildTopicOrder(input.preferredTopics);
+  const goalProfile = getGoalProfile(input.goals);
+  const topicOrder = buildTopicOrder(input.preferredTopics, goalProfile.priorityTopics);
   const maxDays = ROADMAP_LENGTH_BY_LEVEL[assessment.assessedLevel];
 
   const days: RoadmapDay[] = [];
@@ -222,6 +276,7 @@ const buildPersonalizedRoadmap = (
     const knowledge = assessment.topicKnowledge[topicId];
     const topicScorePercent = knowledge ? Math.round((knowledge.correct / knowledge.total) * 100) : null;
     const isPreferred = input.preferredTopics.includes(topicId);
+    const isGoalPriority = !isPreferred && goalProfile.priorityTopics.includes(topicId);
 
     for (let i = 0; i < subtopics.length; i++) {
       if (days.length >= maxDays) break outer;
@@ -233,6 +288,7 @@ const buildPersonalizedRoadmap = (
         topicSubtopicCount: subtopics.length,
         globalDayIndex: days.length,
         totalRoadmapDays: maxDays,
+        difficultyRampThreshold: goalProfile.difficultyRampThreshold,
       });
 
       const prereqLabels = node.prerequisites.map((p) => TOPIC_GRAPH[p]?.label).filter(Boolean);
@@ -240,7 +296,9 @@ const buildPersonalizedRoadmap = (
         ? prereqLabels.length
           ? `One of your selected topics — builds on ${prereqLabels.join(", ")}.`
           : "One of your selected topics."
-        : `Prerequisite groundwork for a topic you selected.`;
+        : isGoalPriority
+          ? `Commonly emphasized for your stated goal.`
+          : `Prerequisite groundwork for a topic you selected.`;
 
       days.push({
         day: days.length + 1,
@@ -291,7 +349,9 @@ export const createOrUpdateOnboardingRoadmap = async (
   return {
     success: true,
     personalizedRoadmap,
-    recommendedTopics: getRecommendedTopics(buildTopicOrder(input.preferredTopics)),
+    recommendedTopics: getRecommendedTopics(
+      buildTopicOrder(input.preferredTopics, getGoalProfile(input.goals).priorityTopics),
+    ),
     assessedLevel: assessment.assessedLevel,
     overallAssessmentScore: assessment.overallAssessmentScore,
   };
@@ -314,7 +374,7 @@ export const getOnboardingStatus = async (userId: string): Promise<OnboardingSta
 export const fetchRoadmap = async (userId: string): Promise<RoadmapDay[]> => {
   const rows = await getRoadmapByUserId(userId);
 
-  return rows.map((row) => ({
+  const baseDays: RoadmapDay[] = rows.map((row) => ({
     day: row.day,
     topic: row.topic,
     subtopic: row.subtopic ?? undefined,
@@ -323,6 +383,44 @@ export const fetchRoadmap = async (userId: string): Promise<RoadmapDay[]> => {
     difficulty: row.difficulty,
     completed: Boolean(row.completed),
   }));
+
+  // Part 9: adapt the difficulty of not-yet-completed days to reflect the
+  // user's actual, ongoing performance (reusing the same Phase 2 engine
+  // Problems.tsx uses — not a second adaptive system). Computed live on
+  // every read rather than persisted: always current, no extra writes, no
+  // cron job needed. Completed days are historical and are never touched,
+  // per the spec ("do not unnecessarily regenerate completed days").
+  let topicDifficultyMap: Record<string, TopicDifficultyInfo> = {};
+  try {
+    topicDifficultyMap = await getTopicDifficultyMap(userId);
+  } catch (err) {
+    console.error("[onboarding] failed to load topic difficulty for roadmap adaptation:", err);
+  }
+
+  return baseDays.map((day) => {
+    if (day.completed) {
+      return day;
+    }
+
+    const info = topicDifficultyMap[day.topic];
+    // Only adapt on a REAL, live performance signal (info.source ===
+    // "performance") — the onboarding-fallback source is already what
+    // produced this day's original difficulty at generation time, so
+    // re-applying it here would be a no-op at best and stale at worst.
+    // Also skip if it doesn't actually differ, to avoid noisy reason text.
+    if (info && info.source === "performance" && info.recommendedDifficulty !== day.difficulty) {
+      console.log(
+        `[onboarding] adapting day ${day.day} (${day.topic}) difficulty ${day.difficulty} -> ${info.recommendedDifficulty}`,
+      );
+      return {
+        ...day,
+        difficulty: info.recommendedDifficulty,
+        reason: `Adjusted from your recent ${day.topic} performance.`,
+      };
+    }
+
+    return day;
+  });
 };
 
 export const completeRoadmapDay = async (
