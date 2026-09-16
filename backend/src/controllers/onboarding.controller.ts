@@ -176,7 +176,7 @@ export const updateOnboarding = async (
   }
 };
 
-const getUserIdFromRequest = (req: AuthenticatedRequest): string | null => {
+export const getUserIdFromRequest = (req: AuthenticatedRequest): string | null => {
   if (req.auth?.userId) {
     return req.auth.userId;
   }
