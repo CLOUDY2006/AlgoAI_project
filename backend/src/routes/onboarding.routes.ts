@@ -4,6 +4,7 @@ import {
   getOnboardingRoadmap,
   getOnboardingRoadmapDay,
   getOnboardingRoadmapMeta,
+  getOnboardingStatusController,
   submitOnboarding,
   updateOnboarding,
 } from "../controllers/onboarding.controller";
@@ -52,5 +53,14 @@ router.get("/days/:day", optionalAuth, withAuth(getOnboardingRoadmapDay));
  * @access  Private
  */
 router.patch("/days/:day/complete", requireAuth, withAuth(completeOnboardingDay));
+
+/**
+ * @route   GET /api/onboarding/status
+ * @desc    Lightweight check for whether this user has completed onboarding —
+ *          used by ProtectedRoute so the backend/DB stays the source of
+ *          truth for onboarding gating, not localStorage/React state.
+ * @access  Public/Private
+ */
+router.get("/status", optionalAuth, withAuth(getOnboardingStatusController));
 
 export default router;

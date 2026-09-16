@@ -7,6 +7,7 @@ import {
   completeRoadmapDay,
   fetchRoadmap,
   getRoadmapMeta,
+  getOnboardingStatus,
 } from "../services/onboarding.service";
 import {
   completeDaySchema,
@@ -365,6 +366,30 @@ export const completeOnboardingDay = async (
       return;
     }
 
+    next(error);
+  }
+};
+
+// ─── Part 12: first-login flow — backend is the source of truth for
+//     whether onboarding has been completed, not localStorage/React state ──
+export const getOnboardingStatusController = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {
+      // No identifiable user yet (not logged in, no guest id) — treat as
+      // "onboarding not completed" rather than erroring, so the frontend
+      // gate has a safe default.
+      res.status(200).json({ onboardingCompleted: false });
+      return;
+    }
+
+    const status = await getOnboardingStatus(userId);
+    res.status(200).json(status);
+  } catch (error) {
     next(error);
   }
 };
