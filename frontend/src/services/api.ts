@@ -291,6 +291,8 @@ export interface ProblemRecord {
 export interface RoadmapDay {
   day: number;
   topic: string;
+  subtopic?: string;
+  reason?: string;
   difficulty: string;
   tasks: string[];
   completed?: boolean;
@@ -779,12 +781,19 @@ try {
 }
 */
 // ... existing code ...
+export interface OnboardingAssessmentAnswerPayload {
+  topic: string;
+  difficulty: string;
+  correct: boolean;
+}
+
 export const submitOnboarding = async (data: {
   experienceLevel: string;
   goals: string;
   preferredTopics: string[];
   timeCommitment: string;
   testScore: number;
+  testAnswers?: OnboardingAssessmentAnswerPayload[];
 }): Promise<any> => {
   const normalizedData = {
     ...data,
@@ -793,6 +802,26 @@ export const submitOnboarding = async (data: {
   };
 
   const response = await api.post('/onboarding', normalizedData);
+  return response.data;
+};
+
+/**
+ * Backend-authoritative onboarding completion check (Part 12) — used by
+ * ProtectedRoute so a page refresh or new device always reflects real DB
+ * state instead of trusting localStorage/React state alone.
+ */
+export const getOnboardingStatus = async (): Promise<{
+  onboardingCompleted: boolean;
+  experienceLevel?: string;
+  assessedLevel?: string;
+}> => {
+  const headers: Record<string, string> = {};
+  const guestUserId = localStorage.getItem('guestUserId');
+  if (guestUserId) {
+    headers['x-user-id'] = guestUserId;
+  }
+
+  const response = await api.get('/onboarding/status', { headers });
   return response.data;
 };
 
