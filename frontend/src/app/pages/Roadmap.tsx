@@ -261,8 +261,8 @@ export default function Roadmap() {
                             DAY {day.day}
                           </span>
                           <span className={`rounded-md px-2 py-0.5 ${
-                            day.difficulty === "Easy" ? "bg-green-500/10 text-green-400" :
-                            day.difficulty === "Medium" ? "bg-yellow-500/10 text-yellow-400" :
+                            day.difficulty?.toLowerCase() === "easy" ? "bg-green-500/10 text-green-400" :
+                            day.difficulty?.toLowerCase() === "medium" ? "bg-yellow-500/10 text-yellow-400" :
                             "bg-red-500/10 text-red-400"
                           }`} style={{ fontSize: '10px' }}>
                             {day.difficulty}
@@ -273,7 +273,15 @@ export default function Roadmap() {
                             </span>
                           )}
                         </div>
-                        <h3 className="text-white" style={{ fontSize: '15px', fontWeight: 700 }}>{day.topic}</h3>
+                        <h3 className="text-white" style={{ fontSize: '15px', fontWeight: 700 }}>
+                          {day.subtopic || day.topic}
+                        </h3>
+                        {day.subtopic && (
+                          <span className="text-[#8b949e]" style={{ fontSize: '11px' }}>{day.topic}</span>
+                        )}
+                        {day.reason && (
+                          <p className="text-[#6b7280] mt-0.5" style={{ fontSize: '11px' }}>{day.reason}</p>
+                        )}
                       </div>
                       {!isLocked && (
                         <button
@@ -329,9 +337,9 @@ export default function Roadmap() {
                 <div className={`text-xs font-bold mb-1 ${day.completed ? "text-green-400" : isLocked ? "text-[#8b949e]" : "text-orange-400"}`}>
                   Day {day.day}
                 </div>
-                <div className="text-white mb-2" style={{ fontSize: '12px', fontWeight: 600, lineHeight: 1.3 }}>{day.topic}</div>
+                <div className="text-white mb-2" style={{ fontSize: '12px', fontWeight: 600, lineHeight: 1.3 }}>{day.subtopic || day.topic}</div>
                 <div className="flex items-center justify-between">
-                  <span style={{ fontSize: '10px' }} className={day.difficulty === "Easy" ? "text-green-400" : day.difficulty === "Medium" ? "text-yellow-400" : "text-red-400"}>
+                  <span style={{ fontSize: '10px' }} className={day.difficulty?.toLowerCase() === "easy" ? "text-green-400" : day.difficulty?.toLowerCase() === "medium" ? "text-yellow-400" : "text-red-400"}>
                     {day.difficulty}
                   </span>
                   {day.completed ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : isLocked ? <Lock className="w-4 h-4 text-[#30363d]" /> : <Play className="w-4 h-4 text-orange-400" />}
