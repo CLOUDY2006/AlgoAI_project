@@ -32,6 +32,10 @@ model OnboardingProfile {
   id        String   @id @default(uuid())
   userId    String   @unique
   experienceLevel String
+  assessedLevel   String?  // Computed from basic-question performance; may differ from experienceLevel
+  onboardingCompleted Boolean @default(false)
+  overallAssessmentScore Int?     // 0-100, from basic questions
+  topicKnowledge  String?  // JSON-serialized: { [topic]: { correct, total, level } }
   goals     String
   preferredTopics String  // Changed from String[] to String
   createdAt DateTime @default(now())
@@ -40,8 +44,24 @@ model OnboardingProfile {
   // Relations
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   roadmaps  Roadmap[]
+  assessmentAnswers OnboardingAssessmentAnswer[]
 
   @@map("user_profiles")
+}
+
+model OnboardingAssessmentAnswer {
+  id         String   @id @default(uuid())
+  userId     String
+  topic      String
+  difficulty String
+  correct    Boolean
+  createdAt  DateTime @default(now())
+
+  // Relations
+  profile OnboardingProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("onboarding_assessment_answers")
 }
 
 model Roadmap {
@@ -49,6 +69,8 @@ model Roadmap {
   userId     String
   day        Int
   topic      String
+  subtopic   String?  // e.g. "Two Pointers on Sorted Arrays" within the "arrays" topic
+  reason     String?  // short human-readable "why this, now" for the UI
   tasks      String   // Changed from Json to String
   difficulty String
   completed  Boolean  @default(false)
