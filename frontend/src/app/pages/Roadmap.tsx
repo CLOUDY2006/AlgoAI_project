@@ -285,7 +285,7 @@ export default function Roadmap() {
                       </div>
                       {!isLocked && (
                         <button
-                          onClick={() => navigate("/problems")}
+                          onClick={() => navigate(`/problems?tag=${encodeURIComponent(day.topic)}`)}
                           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors ${
                             day.completed ? "bg-green-500/10 text-green-400 hover:bg-green-500/20" :
                             "bg-orange-500 text-white hover:bg-orange-600"
@@ -326,7 +326,7 @@ export default function Roadmap() {
             return (
               <button
                 key={day.day}
-                onClick={() => !isLocked && navigate("/problems")}
+                onClick={() => !isLocked && navigate(`/problems?tag=${encodeURIComponent(day.topic)}`)}
                 disabled={isLocked}
                 className={`p-4 rounded-xl border text-left transition-all ${
                   day.completed ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" :

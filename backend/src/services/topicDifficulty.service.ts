@@ -4,6 +4,7 @@ import {
   calculateTopicPerformance,
   calculateWeakness,
 } from "./advanced-recommendation.service";
+import { getRoadmapByUserId } from "../repositories/onboarding.repository";
 import { ExperienceLevel, TopicKnowledge } from "../types/onboarding.types";
 
 export type SimpleDifficulty = "easy" | "medium" | "hard";
@@ -64,9 +65,10 @@ const onboardingFallback = (
 export const getTopicDifficultyMap = async (
   userId: string,
 ): Promise<Record<string, TopicDifficultyInfo>> => {
-  const [progressRecords, profile] = await Promise.all([
+  const [progressRecords, profile, roadmapRows] = await Promise.all([
     getUserProgressRecords(userId),
     prisma.onboardingProfile.findUnique({ where: { userId } }),
+    getRoadmapByUserId(userId),
   ]);
 
   const assessedLevel =
@@ -99,6 +101,12 @@ export const getTopicDifficultyMap = async (
     ...weaknessByTopic.keys(),
     ...Object.keys(topicKnowledge),
     ...preferredTopics,
+    // Every topic your roadmap actually surfaces gets a gate too — not just
+    // the 3 you picked or the 3 basic questions happened to cover. Without
+    // this, a prerequisite topic the roadmap pulled in on its own (e.g.
+    // "queue" as a prerequisite for "graphs") would show completely
+    // ungated until you'd already attempted something in it.
+    ...roadmapRows.map((r) => r.topic),
   ]);
 
   const result: Record<string, TopicDifficultyInfo> = {};
