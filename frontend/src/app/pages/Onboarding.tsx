@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { submitOnboarding } from "../../services/api";
+import { markOnboardingCompleted } from "../components/ProtectedRoute";
 
 const steps = ["Profile", "Goals", "Topics", "Mini Test", "Roadmap"];
 
@@ -63,29 +64,24 @@ const testQuestions = [
   {
     q: "Time complexity of binary search?",
     options: ["O(n)", "O(log n)", "O(n²)", "O(1)"],
-    correct: 1
+    correct: 1,
+    topic: "binary-search",
+    difficulty: "easy",
   },
   {
     q: "Which data structure uses LIFO?",
     options: ["Queue", "Array", "Stack", "Linked List"],
-    correct: 2
+    correct: 2,
+    topic: "stack",
+    difficulty: "easy",
   },
   {
     q: "What does DFS stand for?",
     options: ["Data First Search", "Depth First Search", "Dynamic First Sort", "Direct Find Set"],
-    correct: 1
+    correct: 1,
+    topic: "graphs",
+    difficulty: "easy",
   }
-];
-
-const generatedRoadmap = [
-  { week: 1, topics: ["Arrays Basics", "Sorting Algorithms", "Two Pointers"], count: 15 },
-  { week: 2, topics: ["Linked Lists", "Stack & Queue", "Sliding Window"], count: 18 },
-  { week: 3, topics: ["Binary Search", "Recursion", "Divide & Conquer"], count: 20 },
-  { week: 4, topics: ["Trees: BFS/DFS", "Binary Search Tree"], count: 22 },
-  { week: 5, topics: ["Graphs: BFS/DFS", "Topological Sort"], count: 20 },
-  { week: 6, topics: ["Dynamic Programming 1D", "Memoization"], count: 25 },
-  { week: 7, topics: ["DP 2D", "Backtracking", "Greedy"], count: 22 },
-  { week: 8, topics: ["Heaps", "Tries", "Advanced Graphs"], count: 18 },
 ];
 
 export default function Onboarding() {
@@ -124,6 +120,15 @@ export default function Onboarding() {
       const score = calculateScore();
       setTestScore(score);
 
+      // Per-question results, tagged with topic/difficulty — this is what
+      // actually lets the backend assess demonstrated knowledge per topic,
+      // instead of just a raw 0-3 count.
+      const testAnswers = testQuestions.map((question, i) => ({
+        topic: question.topic,
+        difficulty: question.difficulty,
+        correct: answers[i] === question.correct,
+      }));
+
       // Submit onboarding data to backend
       const response = await submitOnboarding({
         experienceLevel: level,
@@ -131,6 +136,7 @@ export default function Onboarding() {
         preferredTopics: selectedTopics,
         timeCommitment: time,
         testScore: score,
+        testAnswers,
       });
 
       const authToken = localStorage.getItem('authToken');
@@ -139,6 +145,8 @@ export default function Onboarding() {
       if (!authToken && guestUserId) {
         localStorage.setItem('guestUserId', guestUserId);
       }
+
+      markOnboardingCompleted();
 
       // Redirect to roadmap after successful onboarding
       navigate('/roadmap', { replace: true });
@@ -351,27 +359,24 @@ export default function Onboarding() {
                       {level} level
                     </span>
                     <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-md px-2 py-0.5" style={{ fontSize: '11px' }}>
-                      8 weeks plan
+                      Personalized plan
                     </span>
                   </div>
                 </div>
                 <div className="space-y-2 mb-5 max-h-64 overflow-y-auto pr-1">
-                  {generatedRoadmap.map((week) => (
-                    <div key={week.week} className="flex items-start gap-3 p-3 bg-[#21262d] rounded-lg border border-[#30363d]">
-                      <div className="w-12 h-8 bg-orange-500/20 text-orange-400 rounded-lg flex items-center justify-center flex-shrink-0" style={{ fontSize: '11px', fontWeight: 700 }}>
-                        W{week.week}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap gap-1">
-                          {week.topics.map(t => (
-                            <span key={t} className="bg-[#30363d] text-white rounded-md px-2 py-0.5" style={{ fontSize: '11px' }}>{t}</span>
-                          ))}
-                        </div>
-                        <div className="text-[#8b949e] mt-1" style={{ fontSize: '10px' }}>{week.count} problems</div>
-                      </div>
+                  <div className="p-3 bg-[#21262d] rounded-lg border border-[#30363d]">
+                    <div className="text-[#8b949e] mb-2" style={{ fontSize: '11px' }}>Your roadmap will prioritize:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedTopics.map(t => (
+                        <span key={t} className="bg-[#30363d] text-white rounded-md px-2 py-0.5" style={{ fontSize: '11px' }}>{t}</span>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
+                <p className="text-[#8b949e] mb-5" style={{ fontSize: '12px' }}>
+                  We'll build a day-by-day plan from these topics and their prerequisites, calibrated to what
+                  you actually demonstrated in the mini test above — not just what you selected.
+                </p>
                 <button
                   onClick={() => navigate("/roadmap")}
                   className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl py-3 flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/20"
