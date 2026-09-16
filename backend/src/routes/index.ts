@@ -21,6 +21,7 @@ import explainRoutes from "./explain.routes";
 import problemRoutes from "./problem.routes";
 import userRoutes from "./user.routes";
 import codeDnaRoutes from "./codeDna.routes";
+import topicDifficultyRoutes from "./topicDifficulty.routes";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { getWeeklyActivity } from "../controllers/user.controller";
 
@@ -50,6 +51,7 @@ router.use("/execute", executeRoutes);
 router.use("/explain", explainRoutes);
 router.use("/user", userRoutes);
 router.use("/code-dna", codeDnaRoutes);
+router.use("/topic-difficulty", topicDifficultyRoutes);
 
 // Add more routes here as the API grows:
 // router.use('/users',         userRoutes);
