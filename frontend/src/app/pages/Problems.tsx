@@ -9,7 +9,7 @@ import {
 import { problems, type Domain, type Difficulty, type Status, type Problem } from "../data/mockData";
 import { useUserProgress } from "../contexts/UserProgressContext";
 import { useAuth } from "../contexts/AuthContext";
-import { getAllProblems, getUserProgress, type ProgressRecord } from "../../services/api";
+import { getAllProblems, getUserProgress, getTopicDifficultyMap, type ProgressRecord, type TopicDifficultyInfo } from "../../services/api";
 
 const domainTabs: { id: Domain | "All"; label: string; icon: any; color: string }[] = [
   { id: "All", label: "All", icon: Zap, color: "#ff6500" },
@@ -47,6 +47,25 @@ export default function Problems() {
   // Deep-link support: /problems?tag=Dynamic%20Programming (used by Code DNA's
   // Practice buttons) pre-applies the existing tag filter below.
   const [tagFilter, setTagFilter] = useState(() => searchParams.get("tag") || "");
+  // Part 6/7/8: per-topic difficulty gating, from onboarding assessment +
+  // live submission performance (GET /api/topic-difficulty).
+  const [topicDifficultyMap, setTopicDifficultyMap] = useState<Record<string, TopicDifficultyInfo>>({});
+
+  useEffect(() => {
+    getTopicDifficultyMap().then(setTopicDifficultyMap);
+  }, []);
+
+  const normalizeTopicKey = (s: string): string => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+  const getDifficultyInfoForTag = (tag: string): TopicDifficultyInfo | null => {
+    if (!tag) return null;
+    if (topicDifficultyMap[tag]) return topicDifficultyMap[tag];
+    const norm = normalizeTopicKey(tag);
+    const matchKey = Object.keys(topicDifficultyMap).find((k) => normalizeTopicKey(k) === norm);
+    return matchKey ? topicDifficultyMap[matchKey] : null;
+  };
+
+  const activeDifficultyInfo = getDifficultyInfoForTag(tagFilter);
 
   useEffect(() => {
     const loadBackendData = async () => {
@@ -95,13 +114,36 @@ export default function Problems() {
     status: ((problemStatusMap.get(p.id) as Status) ?? progress?.problemStatus?.[p.id] ?? p.status) as Status || defaultStatus,
   }));
 
-  const allTags = Array.from(new Set((problemsWithStatus || []).flatMap(p => p?.tags || [])));
+  // Includes real `topic` values alongside `tags` — the seeded problem data
+  // reliably populates `topic` but `tags` is often empty, so relying on
+  // `tags` alone silently hid most of the catalogue from this filter.
+  const allTags = Array.from(new Set(
+    (problemsWithStatus || []).flatMap(p => [...(p?.tags || []), ...(p?.topic ? [p.topic] : [])])
+  ));
+
+  const matchesTagFilter = (p: { tags?: string[]; topic?: string }, tag: string): boolean => {
+    const target = tag.toLowerCase();
+    if ((p.tags || []).some(t => (t || "").toLowerCase() === target)) return true;
+    if (p.topic && p.topic.toLowerCase() === target) return true;
+    return false;
+  };
+
+  // Part 6/7/8: for the active topic, hide problems above what's actually
+  // unlocked for this user — this is a hard gate (applies even under
+  // "All Difficulty"), not just a default selection, otherwise it wouldn't
+  // actually stop hard problems from showing.
+  const passesDifficultyGate = (p: { difficulty?: string }): boolean => {
+    if (!tagFilter || !activeDifficultyInfo) return true;
+    const d = (p.difficulty || "").toLowerCase();
+    return activeDifficultyInfo.unlockedDifficulties.includes(d as "easy" | "medium" | "hard");
+  };
 
   const filtered = (problemsWithStatus || []).filter(p => {
     if (domain !== "All" && p?.domain !== domain) return false;
     if (difficulty !== "All" && p?.difficulty !== difficulty) return false;
     if (status !== "All" && (p?.status || defaultStatus) !== status) return false;
-    if (tagFilter && !(p?.tags || []).includes(tagFilter)) return false;
+    if (tagFilter && !matchesTagFilter(p || {}, tagFilter)) return false;
+    if (!passesDifficultyGate(p || {})) return false;
     if (search && !p?.title?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -218,9 +260,13 @@ export default function Problems() {
         </div>
         <select value={difficulty} onChange={e => setDifficulty(e.target.value as any)} style={selectStyle}>
           <option value="All">All Difficulty</option>
-          <option value="Easy">Easy</option>
-          <option value="Medium">Medium</option>
-          <option value="Hard">Hard</option>
+          <option value="Easy" disabled={!!activeDifficultyInfo && !activeDifficultyInfo.unlockedDifficulties.includes("easy")}>Easy</option>
+          <option value="Medium" disabled={!!activeDifficultyInfo && !activeDifficultyInfo.unlockedDifficulties.includes("medium")}>
+            {activeDifficultyInfo && !activeDifficultyInfo.unlockedDifficulties.includes("medium") ? "Medium (locked)" : "Medium"}
+          </option>
+          <option value="Hard" disabled={!!activeDifficultyInfo && !activeDifficultyInfo.unlockedDifficulties.includes("hard")}>
+            {activeDifficultyInfo && !activeDifficultyInfo.unlockedDifficulties.includes("hard") ? "Hard (locked)" : "Hard"}
+          </option>
         </select>
         <select value={status} onChange={e => setStatus(e.target.value as any)} style={selectStyle}>
           <option value="All">All Status</option>
@@ -234,6 +280,15 @@ export default function Problems() {
           {allTags.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>
+
+      {tagFilter && activeDifficultyInfo && activeDifficultyInfo.unlockedDifficulties.length < 3 && (
+        <div className="mb-4 flex items-center gap-2" style={{ fontSize: '12px', color: '#f59e0b' }}>
+          <Zap className="w-3.5 h-3.5" />
+          {activeDifficultyInfo.source === 'performance'
+            ? `Showing ${activeDifficultyInfo.unlockedDifficulties.join('/')} problems for "${tagFilter}" based on your recent performance here.`
+            : `Showing ${activeDifficultyInfo.unlockedDifficulties.join('/')} problems for "${tagFilter}" to start — this opens up as you solve more here.`}
+        </div>
+      )}
 
       {/* Problem Table */}
       <motion.div

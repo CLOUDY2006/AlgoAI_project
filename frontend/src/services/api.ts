@@ -138,6 +138,34 @@ export const getHealth = async (): Promise<{ message: string }> => {
 /**
  * Get user progress data
  */
+export interface TopicDifficultyInfo {
+  recommendedDifficulty: 'easy' | 'medium' | 'hard';
+  unlockedDifficulties: ('easy' | 'medium' | 'hard')[];
+  source: 'performance' | 'onboarding' | 'default';
+}
+
+/**
+ * Per-topic difficulty gating for the Problems section — combines the
+ * user's live submission performance (once they have any) with their
+ * onboarding assessment as a fallback for topics they haven't touched yet.
+ * Missing a topic in the returned map means "no restriction" (show everything).
+ */
+export const getTopicDifficultyMap = async (): Promise<Record<string, TopicDifficultyInfo>> => {
+  try {
+    const headers: Record<string, string> = {};
+    const guestUserId = localStorage.getItem('guestUserId');
+    if (guestUserId) {
+      headers['x-user-id'] = guestUserId;
+    }
+
+    const response = await api.get('/topic-difficulty', { headers });
+    return response.data?.data || {};
+  } catch (error) {
+    console.error('Get topic difficulty API error:', error);
+    return {};
+  }
+};
+
 export const getUserProgress = async (userId: string): Promise<{
   count: number;
   data: Array<{
